@@ -8,42 +8,52 @@ local part = game.Workspace:WaitForChild("Baseplate")
 local character = player.Character or player.CharacterAdded:Wait()
 local tweenService = game:GetService("TweenService")
 local movementSpeed = 50
-
 local debounce = false
 
-mouse.Button1Down:Connect(function()
-	if debounce then return end
+local function getClickPosition()
+  local target = mouse.Target
+  if target ~= part then return nil end
+  return mouse.Hit.p
+end
 
-	local target = mouse.Target
-	if target ~= part then return end
+local function calculateTravelDetails(startPosition, clickPosition)
+  local distance = (clickPosition - startPosition).magnitude
+  local travelTime = distance / movementSpeed
+  return distance, travelTime
+end
 
-	local clickPosition = mouse.Hit.p
-	local startPosition = character.PrimaryPart.Position
-	local direction = (clickPosition - startPosition).unit * (clickPosition - startPosition).magnitude
+local function createMovementTween(character, clickPosition, travelTime)
+  local pos = Vector3.new(clickPosition.X, character.HumanoidRootPart.Position.Y, clickPosition.Z)
+  return tweenService:Create(character.HumanoidRootPart, TweenInfo.new(travelTime, Enum.EasingStyle.Exponential), {CFrame = CFrame.new(pos)})
+end
 
-	local ray = Ray.new(startPosition, direction)
-	local hitPart, hitPosition = game.Workspace:FindPartOnRay(ray, character)
+local function moveToPosition()
+  if debounce then return end
+  local clickPosition = getClickPosition()
+  if not clickPosition then return end
 
-	if hitPart == part or hitPart == nil then
-		debounce = true
-		local distance = (clickPosition - startPosition).magnitude
-		local travelTime = distance / movementSpeed
+  local startPosition = character.PrimaryPart.Position
+  local direction = (clickPosition - startPosition).unit * (clickPosition - startPosition).magnitude
+  local ray = Ray.new(startPosition, direction)
+  local hitPart, hitPosition = game.Workspace:FindPartOnRay(ray, character)
 
-		print("Clicked position: " .. tostring(clickPosition))
-		print("Distance: " .. tostring(math.floor(distance)) .. " studs")
-		print("Travel time: " .. tostring(math.floor(travelTime * 10) / 10) .. " seconds")
+  if hitPart == part or hitPart == nil then
+    debounce = true
+    local distance, travelTime = calculateTravelDetails(startPosition, clickPosition)
 
-		local pos = Vector3.new(clickPosition.X, character.HumanoidRootPart.Position.Y, clickPosition.Z)
+    local movementTween = createMovementTween(character, clickPosition, travelTime)
+    movementTween:Play()
 
-		local movementTween = tweenService:Create(character.HumanoidRootPart, TweenInfo.new(travelTime, Enum.EasingStyle.Exponential), {CFrame = CFrame.new(pos)})
-		movementTween:Play()
+    movementTween.Completed:Connect(function()
+      task.wait()
+      debounce = false
+    end)
+  else
+    print("Cannot reach the clicked position in a straight line.")
+    if hitPart then
+      print(hitPart.Name)
+    end
+  end
+end
 
-		movementTween.Completed:Connect(function()
-			task.wait()
-			debounce = false
-		end)
-	else
-		print("Cannot reach the clicked position in a straight line.")
-	end
-end)
-
+mouse.Button1Down:Connect(moveToPosition)
